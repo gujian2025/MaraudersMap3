@@ -1,0 +1,38 @@
+<!--pages/geo1f/geo1f.wxml  最小功能验证原型：手绘图打点 ↔ 经纬度绑定校验-->
+<view class="page">
+  <canvas type="2d" id="geo1f" class="cv" bindtap="onTap"></canvas>
+
+  <view class="group">
+    <text class="text">{{layerTitle}}（{{imageSize}}，楼层 {{floor}}）</text>
+    <text class="text status">{{fitInfo}}</text>
+    <button class="btn" size="mini" bindtap="onToggleFitMode">
+      切换拟合（当前：{{fitMode === 'affine' ? '仿射' : '相似'}}）
+    </button>
+  </view>
+
+  <view class="group">
+    <text class="label">控制点残差（拟合值 vs 采集值）</text>
+    <text class="text" wx:for="{{residuals}}" wx:key="name">
+      {{item.name}} px({{item.px}}) → 误差 {{item.meters}} m
+    </text>
+  </view>
+
+  <view class="group">
+    <text class="label">反查：输入经纬度 → 图上定位</text>
+    <view class="row">
+      <input class="ipt" value="{{probe.lat}}" data-field="lat" bindinput="onInput" placeholder="纬度" />
+      <input class="ipt" value="{{probe.lng}}" data-field="lng" bindinput="onInput" placeholder="经度" />
+      <button class="btn" size="mini" bindtap="onProbe">反查</button>
+    </view>
+    <text class="text" wx:if="{{probeText}}">{{probeText}}</text>
+  </view>
+
+  <view class="group">
+    <text class="label">节点列表（像素 ↔ 经纬度，点图上节点可查看）</text>
+    <text class="text" wx:if="{{!nodes.length}}">暂无节点，点击图上位置新增</text>
+    <text class="text" wx:for="{{nodes}}" wx:key="id">
+      #{{item.id}} 像素({{item.x}}, {{item.y}}) → {{item.latitude}}, {{item.longitude}}
+    </text>
+    <button class="btn" size="mini" bindtap="onClearNodes">清空{{floor}}节点</button>
+  </view>
+</view>

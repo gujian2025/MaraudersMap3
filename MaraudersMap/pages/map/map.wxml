@@ -1,0 +1,86 @@
+<!-- pages/map/map.wxml（主包） -->
+<view class="page">
+  <!-- 背景层：与封面页完全一致（同背景图 + 同遮罩 + 同 parchment）
+       进入时只渲染这一层，与封面页淡出后的画面一模一样，
+       所以 navigateTo 那 300ms 的滑入过程看不出任何变化 -->
+  <image class="page-bg" src="/assets/images/bg-background-sky.jpg" mode="aspectFill"></image>
+  <view class="page-scrim"></view>
+  <image class="page-parchment" src="/assets/images/parchment.png" mode="scaleToFill"></image>
+
+  <!-- 页面内容：滑入动画结束后由 wx:if 一次性渲染出来，
+       无任何淡入/滑动过渡 —— 瞬间直接显示 -->
+  <block wx:if="{{entered}}">
+    <!-- 脚印层：容器内初始为空，FOOTPRINT_DELAY 毫秒后开始逐个落脚印 -->
+    <view class="walk">
+      <view
+        wx:for="{{footprints}}"
+        wx:key="id"
+        class="footprint"
+        style="left: {{item.x}}px; top: {{item.y}}px; transform: translate(-50%, -50%) rotate({{item.rotate}}deg);"
+      >
+        <view class="footprint__sole"></view>
+        <view class="footprint__heel"></view>
+      </view>
+    </view>
+
+    <!-- 地图区域：划定在 parchment 之上，四边内缩到「图标漂浮环」以内，两者不重合 -->
+    <view class="map-stage">
+      <view class="map-window">
+        <map
+          id="map0"
+          class="map"
+          latitude="{{latitude}}"
+          longitude="{{longitude}}"
+          scale="{{scale}}"
+          min-scale="3"
+          max-scale="20"
+          enable-zoom="{{true}}"
+          enable-scroll="{{true}}"
+          enable-rotate="{{true}}"
+          show-compass="{{true}}"
+          show-scale="{{true}}"
+          show-location="{{true}}"
+          markers="{{markers}}"
+          polyline="{{polyline}}"
+          bindtap="onMapTap"
+          bindmarkertap="onMarkerTap"
+          bindcallouttap="onCalloutTap"
+          bindpolylinetap="onPolylineTap"
+        ></map>
+        <view class="map-frame"></view>
+      </view>
+    </view>
+
+    <!-- 当前绘制模式的提示条：只在 node / path 模式下出现，状态一目了然 -->
+    <view class="mode-tip" wx:if="{{mode !== 'none'}}">
+      <text class="mode-tip__text">{{modeTip}}</text>
+    </view>
+
+    <!-- 左下角图标：先在原地悬浮；ORBIT_DELAY 毫秒后沿屏幕最外围一圈缓慢漂浮并旋转。
+         点击墨水瓶 = 节点绘制，点击羽毛笔 = 路径绘制；
+         绘制模式期间停止绕圈（按钮固定在原位），当前工具上浮 20rpx，
+         再次点击同一个工具即退出模式并复位 -->
+    <view
+      class="orbit orbit--inkbox {{orbiting && mode === 'none' ? 'is-orbiting' : ''}} {{mode === 'node' ? 'is-active' : ''}}"
+      bindtap="onToggleNodeMode"
+      hover-class="orbit--hover"
+    >
+      <image class="orbit__img" src="/assets/images/inkbox.png" mode="scaleToFill"></image>
+    </view>
+    <view
+      class="orbit orbit--quill {{orbiting && mode === 'none' ? 'is-orbiting' : ''}} {{mode === 'path' ? 'is-active' : ''}}"
+      bindtap="onTogglePathMode"
+      hover-class="orbit--hover"
+    >
+      <image class="orbit__img" src="/assets/images/quill.png" mode="scaleToFill"></image>
+    </view>
+
+    <!-- 退出按钮：布局精简后唯一保留的控件，避开状态栏、悬浮在左上角，可正常点击 -->
+    <view class="exit-wrap" style="padding-top: {{statusBarHeight}}px">
+      <view class="exit" bindtap="onBack" hover-class="exit--hover" hover-stay-time="80">
+        <text class="exit__icon">‹</text>
+        <text class="exit__label">Mischief Managed</text>
+      </view>
+    </view>
+  </block>
+</view>

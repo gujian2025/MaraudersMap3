@@ -1,0 +1,65 @@
+/* pages/geo1f/geo1f.wxss  最小样式，仅保证可用与可读 */
+.page {
+  padding: 16rpx;
+  background: #101418;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.cv {
+  width: 100%;
+  height: 640rpx;
+  background: #101418;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+  margin: 12rpx 0;
+  flex-wrap: wrap;
+}
+
+.btn.on {
+  background: #2f6bff;
+  color: #fff;
+}
+
+.group {
+  margin: 16rpx 0;
+  padding: 12rpx;
+  border: 1rpx solid #2a3038;
+  border-radius: 8rpx;
+}
+
+.label {
+  display: block;
+  color: #9aa4b2;
+  font-size: 22rpx;
+  margin-bottom: 8rpx;
+}
+
+.ipt {
+  flex: 1;
+  min-width: 180rpx;
+  height: 56rpx;
+  padding: 0 12rpx;
+  border: 1rpx solid #2a3038;
+  border-radius: 6rpx;
+  color: #e6edf3;
+  font-size: 24rpx;
+}
+
+.text {
+  display: block;
+  color: #e6edf3;
+  font-size: 22rpx;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.status {
+  color: #f5a524;
+  margin-bottom: 8rpx;
+}

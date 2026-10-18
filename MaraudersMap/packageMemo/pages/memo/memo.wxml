@@ -1,0 +1,104 @@
+<!-- packageMemo/pages/memo/memo.wxml（分包 packageMemo） -->
+<!-- 层级（数字越大越靠上）：背景(0) → 遮罩(1) → 星星(2) → book.png(3) → 内容边界框(4)
+
+     两块可调参数都在 memo.wxss 顶部：
+       ① book.png   --books-left / --books-bottom / --books-scale（还可调 -w / -opacity / -rotate）
+       ② 内容边界框 --frame-left / --frame-bottom / --frame-w / --frame-h
+                    （辅助描边：--frame-debug 改成 1 就显示虚线框）
+     除这两块参数区外，其余不用动 -->
+<view class="memo">
+  <!-- ===================== 装饰层 ===================== -->
+  <view class="memo__stage">
+    <!-- z0 背景：与封面页同一张图、同一 mode（aspectFill 等比铺满不拉伸） -->
+    <image class="memo__bg" src="/assets/images/bg-background-sky.jpg" mode="aspectFill"></image>
+    <!-- z1 遮罩：与封面页同一条渐变 -->
+    <view class="memo__scrim"></view>
+
+    <!-- z2 星星装饰层：沿用封面页 star-* 的实现与参数，浮动特效未做改动
+         mode=widthFix：只给宽度，高度按原图比例自动算出，绝不会被拉变形 -->
+    <view class="star star--1">
+      <image class="star__img" src="/assets/images/star-1.png" mode="widthFix"></image>
+    </view>
+    <view class="star star--2">
+      <image class="star__img" src="/assets/images/star-2.png" mode="widthFix"></image>
+    </view>
+    <view class="star star--3">
+      <image class="star__img" src="/assets/images/star-3.png" mode="widthFix"></image>
+    </view>
+    <view class="star star--4">
+      <image class="star__img" src="/assets/images/star-4.png" mode="widthFix"></image>
+    </view>
+    <view class="star star--5">
+      <image class="star__img" src="/assets/images/star-5.png" mode="widthFix"></image>
+    </view>
+
+    <!-- z3 book.png 图片图层：position / 宽 / 高由参数区控制；
+         宽高互不绑定 → 可以只拉长边而把宽度留在原地；
+         pointer-events: none → 纯装饰，不拦截任何点击 -->
+    <image class="memo__books" src="/packageMemo/assets/images/book.png" mode="scaleToFill"></image>
+  </view>
+
+  <!-- ===================== z4 内容边界框：所有文字与功能块都在框内（按钮栏已独立到 z5） =====================
+       框的位置与尺寸：左边距 / 下边距 / 宽 / 高（参数区控制）
+       内容超过框高时，在框内部上下滚动，页面整体不动 -->
+  <view class="memo__frame">
+    <!-- 滚动区：标题 + 三张功能卡（占满按钮栏以外的高度） -->
+    <scroll-view class="memo__scroll" scroll-y>
+      <view class="memo__meta">
+        <text class="memo__title">{{title}}</text>
+        <text class="memo__sub">{{type === 'path' ? '路径记录' : '节点记录'}} · {{savedAtText}}</text>
+      </view>
+
+      <view class="card">
+        <view class="card__head">
+          <text class="card__title">文字</text>
+          <text class="card__count">{{text.length}} 字</text>
+        </view>
+        <textarea
+          class="card__textarea"
+          value="{{text}}"
+          placeholder="My name is Tom Riddle…"
+          placeholder-class="card__placeholder"
+          maxlength="-1"
+          auto-height
+          show-confirm-bar="{{false}}"
+          bindinput="onTextInput"
+        ></textarea>
+      </view>
+
+      <view class="card">
+        <view class="card__head">
+          <text class="card__title">图片</text>
+          <text class="card__count">{{images.length}}/9</text>
+        </view>
+        <view class="grid">
+          <view class="grid__item" wx:for="{{images}}" wx:key="*this">
+            <image class="grid__img" src="{{item}}" mode="aspectFill" data-src="{{item}}" bindtap="onPreviewImage"></image>
+            <view class="grid__del" data-index="{{index}}" catchtap="onRemoveImage">✕</view>
+          </view>
+          <view class="grid__add" wx:if="{{images.length < 9}}" bindtap="onChooseImage">＋</view>
+        </view>
+      </view>
+
+      <!-- 路径记录只需文字 + 图片；视频保留给节点记录 -->
+      <view class="card" wx:if="{{type !== 'path'}}">
+        <view class="card__head">
+          <text class="card__title">视频</text>
+        </view>
+        <view wx:if="{{video}}" class="video-box">
+          <video class="video-box__player" src="{{video}}" controls show-fullscreen-btn show-play-btn></video>
+          <view class="video-box__del" bindtap="onRemoveVideo">删除视频</view>
+        </view>
+        <view wx:else class="add-video" bindtap="onChooseVideo">＋ 添加视频</view>
+      </view>
+    </scroll-view>
+
+  </view>
+
+  <!-- ===================== z5 按钮栏：从边界框里独立出来，位置单独可调 =====================
+       左边距 / 下边距 / 宽度 / 按钮间距 都在参数区 ③，与边界框互不干涉 -->
+  <view class="memo__actions">
+    <view class="btn memo__btn memo__btn--map" bindtap="onCancel">Map</view>
+    <view class="btn memo__btn memo__btn--save" bindtap="onSave">Save my memory</view>
+  </view>
+</view>

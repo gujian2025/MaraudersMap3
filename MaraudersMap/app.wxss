@@ -1,0 +1,98 @@
+/**app.wxss**/
+page {
+  --brand: #2f6bff;
+  --brand-dark: #1e3a6b;
+  --ink: #0e1220;
+  --text: #1f2937;
+  --text-sub: #6b7280;
+  --line: #e5e7eb;
+  --bg: #f5f6f8;
+
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+}
+
+view,
+text,
+image,
+input,
+textarea {
+  box-sizing: border-box;
+}
+
+/* ===== 脚印行走层（封面页与地图页共用） ===== */
+.walk {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 6; /* 各页面可用同名单类规则覆盖（地图页为 3） */
+}
+
+.footprint {
+  position: absolute;
+  width: 34rpx;
+  height: 60rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  opacity: 0;
+  animation: foot-fade 2600ms ease-out forwards;
+}
+
+/* 前掌 */
+.footprint__sole {
+  width: 30rpx;
+  height: 38rpx;
+  border-radius: 46% 46% 42% 42% / 64% 64% 36% 36%;
+  background: #000000;
+}
+
+/* 脚跟 */
+.footprint__heel {
+  width: 20rpx;
+  height: 20rpx;
+  border-radius: 50%;
+  background: #000000;
+}
+
+/* 淡入代表脚落下，淡出代表脚抬起 */
+@keyframes foot-fade {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.85;
+  }
+  45% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.btn {
+  height: 88rpx;
+  border-radius: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+}
+
+.btn--primary {
+  background: var(--brand);
+  color: #ffffff;
+}
+
+.btn--ghost {
+  background:#121724;
+  color: var(--text);
+  /* border: 2rpx solid var(--line); */
+}

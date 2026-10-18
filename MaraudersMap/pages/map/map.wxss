@@ -1,0 +1,321 @@
+/* pages/map/map.wxss（主包）
+   背景 / 图标等公共图片统一放在 assets/，与封面页共用 */
+
+/* ===================== 可调参数 =====================
+   1) 背景 / parchment：与封面页 pages/cover/cover.wxss 保持一致，改封面时同步这里
+   2) 地图区域 --map-*：四边内缩量必须【大于】漂浮环占用的宽度，否则会与图标重叠
+      （漂浮环宽度 ≈ --*-orbit-x/y + 图标半宽；当前 21% / 18% / 16% 已留出余量）
+   3) 图标：--*-idle-x/y = 进入页面时的初始位置（距左边缘 / 距下边缘）
+      --*-orbit-x/y = 漂浮轨迹距屏幕左右 / 上下边缘的距离
+      --*-orbit-duration = 绕行一圈用时（越大越慢）
+   ==================================================== */
+.page {
+  /* parchment：与封面同参数 */
+  --parchment-left: 0rpx;
+  --parchment-right: 0rpx;
+  --parchment-top: 50rpx;
+  --parchment-bottom: 50rpx;
+  --parchment-scale: 1.4;
+  --parchment-rotate: 0deg;
+
+  /* 地图区域：落在漂浮环以内的矩形（上边留给退出按钮，下边留给漂浮环） */
+  --map-left: 21%;
+  --map-right: 21%;
+  --map-top: 18%;
+  --map-bottom: 16%;
+
+  /* 图标初始位置（左下角，距左边缘 / 距下边缘） */
+  --inkbox-idle-x: 90rpx;
+  --inkbox-idle-y: 160rpx;
+  --quill-idle-x: 260rpx;
+  --quill-idle-y: 90rpx;
+
+  /* 漂浮轨迹（沿屏幕最外围一圈） */
+  --inkbox-orbit-x: 7%;
+  --inkbox-orbit-y: 6%;
+  --quill-orbit-x: 6%;
+  --quill-orbit-y: 10%;
+
+  /* 绘制模式下当前工具上浮的距离 */
+  --tool-lift: 20rpx;
+  --tool-lift-duration: 240ms;
+
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #0b1020;
+}
+
+/* ===================== 背景层（与封面一致，进入即显示） ===================== */
+.page-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.page-scrim {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(14, 18, 32, 0.3) 0%,
+    rgba(14, 18, 32, 0.45) 45%,
+    rgba(14, 18, 32, 0.72) 100%
+  );
+}
+
+/* parchment：四边距屏幕距离 + 缩放，与封面完全一致 */
+.page-parchment {
+  position: absolute;
+  left: var(--parchment-left, 0rpx);
+  top: var(--parchment-top, 50rpx);
+  width: calc(100% - var(--parchment-left, 0rpx) - var(--parchment-right, 0rpx));
+  height: calc(100% - var(--parchment-top, 50rpx) - var(--parchment-bottom, 50rpx));
+  transform-origin: center center;
+  transform: rotate(var(--parchment-rotate, 0deg)) scale(var(--parchment-scale, 1));
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ===================== 脚印层 ===================== */
+/* 容器不做淡入：3 秒后由 JS 开始逐个落脚印，脚印自身的淡入淡出见 app.wxss */
+.walk {
+  z-index: 3;
+}
+
+/* ===================== 地图区域 ===================== */
+/* 划定在 parchment 之上：四边内缩，屏幕外围一圈留给图标漂浮，两者不重合 */
+.map-stage {
+  position: absolute;
+  left: var(--map-left, 21%);
+  right: var(--map-right, 21%);
+  top: var(--map-top, 18%);
+  bottom: var(--map-bottom, 16%);
+  z-index: 4;
+}
+
+.map-window {
+  position: relative;
+  width: 50%;
+  height: 80%;
+  border-radius: 24rpx;
+  overflow: hidden;
+  /* box-shadow: 0 0 40rpx rgba(2, 6, 23, 0.45); */
+}
+
+/* 地图随内容块一次性出现，不做淡入过渡 */
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+/* 圆角描边：明确框出地图区域，同时遮住原生 map 的直角 */
+.map-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 24rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 24rpx rgba(14, 18, 32, 0.35) inset;
+  pointer-events: none;
+}
+
+/* ===================== 左下角图标 ===================== */
+/* 初始：停在左下角原地悬浮；加上 .is-orbiting 后沿屏幕最外围一圈漂浮并旋转 */
+.orbit {
+  position: absolute;
+  left: var(--idle-x, 90rpx);
+  top: calc(100% - var(--idle-y, 160rpx));
+  width: var(--orbit-w, 200rpx);
+  height: var(--orbit-h, 142rpx);
+  pointer-events: none;
+  z-index: 6;
+  transform: translate(-50%, -50%);
+  animation: orbit-hover var(--hover-duration, 5s) ease-in-out infinite;
+  opacity: var(--orbit-opacity, 1);
+  /* 上浮 / 复位走过渡，与模式启停同步（绕圈期间由动画接管 top，不影响） */
+  transition: top var(--tool-lift-duration, 240ms) ease;
+}
+
+/* 图片本身只负责旋转与缩放，避免与外层的漂浮/绕行动画互相覆盖 */
+.orbit__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+  transform: rotate(var(--img-rotate, 0deg)) scale(var(--img-scale, 1));
+}
+
+.orbit--inkbox {
+  --idle-x: var(--inkbox-idle-x, 90rpx);
+  --idle-y: var(--inkbox-idle-y, 160rpx);
+  --orbit-x: var(--inkbox-orbit-x, 7%);
+  --orbit-y: var(--inkbox-orbit-y, 6%);
+  --orbit-w: 200rpx;
+  --orbit-h: 142rpx;
+  --orbit-opacity: 1;
+  --orbit-duration: 26s;
+  --hover-duration: 5s;
+  --img-rotate: -30deg;
+  --img-scale: 0.8;
+}
+
+.orbit--quill {
+  --idle-x: var(--quill-idle-x, 260rpx);
+  --idle-y: var(--quill-idle-y, 90rpx);
+  --orbit-x: var(--quill-orbit-x, 6%);
+  --orbit-y: var(--quill-orbit-y, 10%);
+  --orbit-w: 180rpx;
+  --orbit-h: 127rpx;
+  --orbit-opacity: 1;
+  --orbit-duration: 30s;
+  --hover-duration: 6.4s;
+  --img-rotate: 0deg;
+  --img-scale: 1;
+}
+
+/* 作为工具按钮：必须能点（.orbit 默认放行手势，这里单独打开） */
+.orbit--inkbox,
+.orbit--quill {
+  pointer-events: auto;
+}
+
+.orbit--hover {
+  opacity: 0.82;
+}
+
+/* 绘制模式启用中：当前工具上浮 --tool-lift（默认 20rpx）并轻微放大，
+   退出模式后类被移除 → 自动回落原位（top 有过渡） */
+.orbit.is-active {
+  top: calc(100% - var(--idle-y, 160rpx) - var(--tool-lift, 20rpx));
+  opacity: 1;
+}
+
+.orbit.is-active .orbit__img {
+  transform: rotate(var(--img-rotate, 0deg)) scale(calc(var(--img-scale, 1) * 1.08));
+}
+
+/* 顶部状态提示条：node / path 模式各自显示当前可做的操作 */
+.mode-tip {
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  transform: translateX(-50%);
+  z-index: 7;
+  max-width: 72%;
+  padding: 12rpx 24rpx;
+  border-radius: 28rpx;
+  background: rgba(124, 45, 18, 0.88);
+  border: 2rpx solid rgba(255, 255, 255, 0.35);
+}
+
+.mode-tip__text {
+  font-size: 24rpx;
+  line-height: 32rpx;
+  color: #fff7ed;
+}
+
+/* 开始绕圈：轨迹切换为矩形环，并缓慢自转 */
+.orbit.is-orbiting {
+  animation: orbit-ring var(--orbit-duration, 26s) linear infinite;
+}
+
+/* quill 反向绕行，避免两个图标贴在一起走 */
+.orbit--quill.is-orbiting {
+  animation-direction: reverse;
+}
+
+/* 原地悬浮：小幅上浮 + 轻摇 */
+@keyframes orbit-hover {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  25% {
+    transform: translate(-50%, -50%) translate(6rpx, -8rpx) rotate(1.5deg);
+  }
+  50% {
+    transform: translate(-50%, -50%) translate(0, -12rpx) rotate(0deg);
+  }
+  75% {
+    transform: translate(-50%, -50%) translate(-6rpx, -6rpx) rotate(-1.5deg);
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+}
+
+/* 沿屏幕最外围一圈漂浮：左下 → 右下 → 右上 → 左上 → 回左下，同时缓慢旋转 */
+@keyframes orbit-ring {
+  0% {
+    left: var(--orbit-x, 7%);
+    top: calc(100% - var(--orbit-y, 6%));
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  25% {
+    left: calc(100% - var(--orbit-x, 7%));
+    top: calc(100% - var(--orbit-y, 6%));
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+  50% {
+    left: calc(100% - var(--orbit-x, 7%));
+    top: var(--orbit-y, 6%);
+    transform: translate(-50%, -50%) rotate(180deg);
+  }
+  75% {
+    left: var(--orbit-x, 7%);
+    top: var(--orbit-y, 6%);
+    transform: translate(-50%, -50%) rotate(270deg);
+  }
+  100% {
+    left: var(--orbit-x, 7%);
+    top: calc(100% - var(--orbit-y, 6%));
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/* ===================== 退出按钮（精简后唯一保留的控件） ===================== */
+.exit-wrap {
+  position: relative;
+  z-index: 5;
+  align-self: flex-start;
+  padding-left: 24rpx;
+  padding-right: 24rpx;
+}
+
+.exit {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 72rpx;
+  padding: 0 24rpx;
+  border-radius: 36rpx;
+  border: 2rpx solid rgba(203, 213, 225, 0.35);
+  background: rgba(14, 18, 32, 0.5);
+}
+
+.exit--hover {
+  background: rgba(14, 18, 32, 0.8);
+}
+
+.exit__icon {
+  font-size: 38rpx;
+  line-height: 40rpx;
+  color: #cbd5e1;
+  margin-right: 6rpx;
+}
+
+.exit__label {
+  font-size: 26rpx;
+  color: #cbd5e1;
+}

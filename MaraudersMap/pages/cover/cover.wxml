@@ -1,0 +1,184 @@
+<!--pages/cover/cover.wxml-->
+<view
+  class="cover"
+  bindtouchstart="onTouchStart"
+  bindtouchmove="onTouchMove"
+  bindtouchend="onTouchEnd"
+  bindtap="enterMap"
+>
+  <!-- 背景图：全项目统一使用 bg-background-sky.jpg（不透明底图，用 JPEG 存放以压缩体积），
+       作为最底层背景（z-index: 0）
+       aspectFill 等比放大铺满全屏（超出部分裁掉，不做拉伸变形） -->
+  <image class="cover__bg" src="/assets/images/bg-background-sky.jpg" mode="aspectFill"></image>
+  <!-- 半透明遮罩，保证白色文字在背景上可读；不需要可整行删除 -->
+  <view class="cover__scrim"></view>
+
+  <!-- 星星装饰层（z-index: 2）：夹在「背景 + 遮罩」与 parchment 之间
+       五颗星散布在上方两侧与中部，只做轻微漂浮；
+       绝对定位 + pointer-events: none → 不参与布局、不产生偏移、不拦截上滑/点击手势；
+       层级低于 parchment，因此不会遮挡 parchment 上的任何内容
+       位置 / 大小 / 透明度 / 浮动节奏都在 cover.wxss 顶部「星星图层」参数区里改，这里不用动
+       mode=widthFix：只给宽度，高度按原图比例自动算出 → 始终保持原始宽高比 -->
+  <view class="star star--1">
+    <image class="star__img" src="/assets/images/star-1.png" mode="widthFix"></image>
+  </view>
+  <view class="star star--2">
+    <image class="star__img" src="/assets/images/star-2.png" mode="widthFix"></image>
+  </view>
+  <view class="star star--3">
+    <image class="star__img" src="/assets/images/star-3.png" mode="widthFix"></image>
+  </view>
+  <view class="star star--4">
+    <image class="star__img" src="/assets/images/star-4.png" mode="widthFix"></image>
+  </view>
+  <view class="star star--5">
+    <image class="star__img" src="/assets/images/star-5.png" mode="widthFix"></image>
+  </view>
+
+  <!-- 图层① table：盖在背景/遮罩之上，位于 parchment 之下（z-index: 2）
+       （当前未渲染；该层级现由上面的星星装饰层使用）
+       不受内边距与裁剪限制，可任意放大、坐标可超出 0~100%
+       调节参数见 cover.wxss 顶部「图层可调参数」区，这里不用改 -->
+
+<!--====================================-->
+  <!-- 图层② parchment：叠在 table 之上（z-index: 3），仍在脚印与文字之下
+       宽度 = 屏幕宽度的 90%（左右各留 5%），高度由 mode="widthFix" 按原图
+       887×1774 自动算出（纸高 = 2 × 纸宽），始终保持宽高比
+       --parchment-max-w（默认 44vh）兜住矮屏：纸高 ≤ 88vh，不会超出可视区
+       内层 .cover__rim 是环绕纹理：mode="widthFix" 按 6966×3921 原始比例呈现，
+       只给宽度、高度自动算出，不做任何压缩 / 拉伸
+       leaving = 上滑被捕捉到：环绕纹理随文字一起淡出；同时纸面本体等比放大到铺满整屏
+       （倍率由 cover.js 按屏幕尺寸算好，整条 transform 内联下发；见 parchmentFillStyle），
+       退出地图回到封面时再淡回来 / 缩回原尺寸 -->
+  <view
+    class="cover__layer cover__layer--parchment {{leaving ? 'is-leaving' : ''}}"
+    style="{{leaving ? parchmentFillStyle : ''}}"
+  >
+    <image class="cover__paper" src="/assets/images/parchment.png" mode="widthFix"></image>
+    <image class="cover__rim" src="/assets/images/pattern.png" mode="widthFix"></image>
+  </view>
+
+  <!-- 图层③ inkbox：右下角装饰（z-index: 4）
+       用「距屏幕右边 / 下边的距离」定位：--inkbox-right / bottom
+       尺寸 --inkbox-w / h（放大时右下角不动，向左上生长）
+       外层 view 负责浮动摇晃动画，内层 image 负责旋转与缩放 -->
+  <view class="cover__layer cover__layer--inkbox {{leaving ? 'is-leaving' : ''}}">
+    <image class="cover__layer-img" src="/assets/images/inkbox.png" mode="scaleToFill"></image>
+  </view>
+
+  <!-- 图层④ quill：叠在 inkbox 之上（z-index: 5），同为右下角装饰
+       参数 --quill-right / bottom / w / h / scale，调节方式与 inkbox 相同；
+       浮动周期与 inkbox 不同，两者不会同步晃动 -->
+  <view class="cover__layer cover__layer--quill {{leaving ? 'is-leaving' : ''}}">
+    <image class="cover__layer-img" src="/assets/images/quill.png" mode="scaleToFill"></image>
+  </view>
+
+  <!-- 脚印行走层：JS 随机漫步，逐个生成脚印，靠淡入淡出表现落步与抬脚
+       封面状态可见；上滑后随文字一起淡出，进入地图视图 3 秒后再淡回来 -->
+  <view class="walk {{walkVisible ? '' : 'is-hidden'}}">
+    <view
+      wx:for="{{footprints}}"
+      wx:key="id"
+      class="footprint"
+      style="left: {{item.x}}px; top: {{item.y}}px; transform: translate(-50%, -50%) rotate({{item.rotate}}deg);"
+    >
+      <view class="footprint__sole"></view>
+      <view class="footprint__heel"></view>
+    </view>
+  </view>
+
+  <!-- 地图视图：上滑（或点击）后在【同一页面内】直接呈现，
+       不做任何页面跳转 / 刷新 —— 没有 navigateTo，也就没有页面切换动画
+       entered = 内容正在 / 已完成淡入；wx:if 保证未进入时完全不渲染 -->
+  <view wx:if="{{inMap}}" class="map-view {{entered ? 'is-entered' : ''}}">
+    <!-- 地图区域：划定在 parchment 之上，四边内缩到「图标漂浮环」以内，两者不重合 -->
+    <view class="map-stage">
+      <view class="map-window" style="width: {{mapWin.width}}; height: {{mapWin.height}}; left: {{mapWin.left}}; top: {{mapWin.top}}; bottom: {{mapWin.bottom}}; transform: {{mapWin.transform}};">
+        <map
+          wx:if="{{mapVisible}}"
+          id="map0"
+          class="map"
+          latitude="{{latitude}}"
+          longitude="{{longitude}}"
+          scale="{{scale}}"
+          rotate="{{rotate}}"
+          min-scale="{{minScale}}"
+          max-scale="20"
+          enable-zoom="{{true}}"
+          enable-scroll="{{true}}"
+          enable-rotate="{{true}}"
+          show-compass="{{true}}"
+          show-scale="{{true}}"
+          show-location="{{true}}"
+          markers="{{markers}}"
+          polyline="{{polyline}}"
+          bindtap="onMapTap"
+          bindmarkertap="onMarkerTap"
+          bindcallouttap="onCalloutTap"
+          bindpolylinetap="onPolylineTap"
+          bindupdated="onMapUpdated"
+          bindregionchange="onRegionChange"
+        ></map>
+        <view class="map-frame"></view>
+      </view>
+    </view>
+
+    <!-- 当前绘制模式的提示条：只在 node / path 模式下出现，状态一目了然 -->
+    <view class="mode-tip" wx:if="{{mode !== 'none'}}">
+      <text class="mode-tip__text">{{modeTip}}</text>
+    </view>
+
+    <!-- 左下角贴图：位置固定（见 cover.wxss 的 --inkbox-idle-* / --quill-idle-*），
+         只在原地做小幅上浮 + 轻摇（orbit-sway），不再随机漂移。
+         点墨水瓶 = 节点绘制（mode='node'），点羽毛笔 = 路径绘制（mode='path'），
+         两者互斥；当前工具上浮 20rpx，再点一次即退出模式并复位。
+         catchtap 阻止冒泡，避免触发外层 cover 的 enterMap -->
+    <view
+      class="orbit orbit--inkbox {{mode === 'node' ? 'is-active' : ''}}"
+      catchtap="onToggleNodeMode"
+      hover-class="orbit--hover"
+      hover-stay-time="80"
+    >
+      <image class="orbit__img" src="/assets/images/inkbox.png" mode="scaleToFill"></image>
+    </view>
+    <view
+      class="orbit orbit--quill {{mode === 'path' ? 'is-active' : ''}}"
+      catchtap="onTogglePathMode"
+      hover-class="orbit--hover"
+      hover-stay-time="80"
+    >
+      <image class="orbit__img" src="/assets/images/quill.png" mode="scaleToFill"></image>
+    </view>
+
+    <!-- 退出按钮：布局精简后唯一保留的控件，避开状态栏、悬浮在左上角，可正常点击
+         点击后退回封面视图（同样是同页内切换，不跳转） -->
+    <view class="exit-wrap" style="padding-top: {{statusBarHeight}}px">
+      <view class="exit" bindtap="onExitMap" hover-class="exit--hover" hover-stay-time="80">
+        <text class="exit__icon">‹</text>
+        <text class="exit__label">Mischief Managed</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 文字安全区：沿用原有内边距与排版，并对文字做裁剪（overflow: hidden）。
+       图层①/② 在该容器之外，因此不受此限制
+       leaving = 上滑已完成，整块文字淡出，随即在同一页面内切出地图视图 -->
+  <view class="cover__safe {{leaving ? 'is-leaving' : ''}}">
+    <view class="cover__body">
+      <text class="cover__eyebrow1">Monny, Hachimitu, Padfoot and Prongs</text>
+      <text class="cover__eyebrow2">are proud to present</text>
+      <view class="cover__line"></view>
+      <text class="cover__title1">The Marauder's Map</text>
+      <text class="cover__title2">of</text>
+      <text class="cover__title2">Shanghaitech</text>
+    </view>
+
+    <view class="cover__footer">
+      <view class="cover__hint {{ready ? 'is-ready' : ''}}" style="height: 143rpx; display: flex; box-sizing: border-box">
+        <view class="cover__arrow"></view>
+        <text class="cover__hint-text">{{ready ? 'trick or treat?' : 'I solenmly swear that I am up to no good'}}</text>
+      </view>
+      <text class="cover__tip">2026.10.16.Hechgemer</text>
+    </view>
+  </view>
+</view>

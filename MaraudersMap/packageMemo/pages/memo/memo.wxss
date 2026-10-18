@@ -1,0 +1,531 @@
+/* packageMemo/pages/memo/memo.wxss
+   层级（数字越大越靠上）：背景(0) → 遮罩(1) → 星星(2) → book.png(3) → 内容边界框(4)
+   背景 / 遮罩 / 星星三层，实现方式与封面页 pages/cover/cover.wxss 完全一致（同图、同 mode、同动画）
+
+   ====================================================================
+   ★★★ 下面两块就是你要改的全部参数（改完刷新即可看到效果） ★★★
+   ==================================================================== */
+
+.memo {
+  /* ---------------- ① book.png 图片（z3） ----------------
+     left   = 图片【左边缘】到屏幕左边的距离
+     bottom = 图片【下边缘】到屏幕下边的距离
+     w / h  = 宽 / 高，两者互不绑定 → 想「宽不变、只拉长边」就只改 h
+              原图 420×840（1:2）：w = 620rpx 时的等比高度 = 1240rpx
+              h 大于 1240rpx = 竖向拉长；小于 = 竖向压扁（宽度始终不受影响）
+     scale  = 整体缩放倍率：宽高同乘（比例不变）：1 基准，1.2 放大，0.8 缩小
+     opacity = 浓淡 0~1；rotate = 旋转角度 */
+  --books-left: 0rpx;
+  --books-bottom: -10rpx;
+  --books-w: 620rpx;
+  --books-h: 1400rpx;
+  --books-scale: 1.25;
+  --books-opacity: 0.9;
+  --books-rotate: 0deg;
+
+  /* ---------------- ② 内容边界框（z4：标题 + 三张卡；按钮栏见下方的 ③） ----------------
+     left   = 边界框【左边】到屏幕左边的距离
+     bottom = 边界框【下边】到屏幕下边的距离（加大这个值，框就往上抬）
+     w / h  = 边界框的宽 / 高（rpx）。内容比框高时，在框内部上下滚动，页面整体不动
+     top    = 边界框【上边】到屏幕顶部的距离，默认 auto（不参与定位）
+              ★ 想把框继续往上顶：把 --frame-h 改成 auto，再给 --frame-top 一个数值，
+                框就会锁定在「距顶 top、距底 bottom」之间、高度自动 —— 无论怎么顶都不会出屏幕
+              ★ 注意：top 与 h 只能同时用一个。给了具体的 top，就必须把 h 写成 auto
+     pad    = 框内四周留白（让卡片不贴着框边）
+     radius = 框的圆角
+     debug  = 辅助描边开关：0 = 不显示，1 = 显示白色虚线框（调完请改回 0） */
+  --frame-left: 85rpx;
+  --frame-bottom: 350rpx;
+  --frame-w: 500rpx;
+  --frame-h: 1000rpx;
+  --frame-top: auto;
+  --frame-pad: 50rpx;
+  --frame-radius: 24rpx;
+  --frame-debug: 0;
+
+  /* ---------------- ③ 按钮栏（z5：Map / Save my memory），独立于边界框 ----------------
+     left   = 按钮栏【左边】到屏幕左边的距离
+     bottom = 按钮栏【下边】到屏幕下边的距离（加大就往上抬）
+              实际距底 = 这个值 + 系统底部安全区（iPhone 手势条）；
+              想让它严格等于你填的数，就把 .memo__actions 里 env(safe-area-inset-bottom) 那段删掉
+     w      = 按钮栏总宽度（两个按钮在里面等分，间距用 gap 调）
+     gap    = 两个按钮之间的间距
+     debug  = 辅助描边开关：0 = 不显示，1 = 显示白色虚线框（调完请改回 0）
+     float-x / float-y / float-duration = 两个按钮的漂浮幅度与一轮用时
+              两颗按钮相位错开半轮（一个往左上时另一个往右下），所以看着是各自在飘 */
+  --actions-left: 100rpx;
+  --actions-bottom: 50rpx;
+  --actions-w: 550rpx;
+  --actions-gap: 60rpx;
+  --actions-debug: 0;
+  --btn-float-x: 6rpx;
+  --btn-float-y: 8rpx;
+  --btn-float-duration: 5.6s;
+
+  /* ---------------- 星星参数区（与封面页 cover.wxss 取值一致，勿改动） ----------------
+     x / y = 中心点坐标（% 相对整屏宽 / 高）；w = 宽度，高度由 widthFix 按原图比例算出
+     opacity = 透明度；float-x / float-y = 浮动幅度；float-rotate = 摇摆角度
+     float-duration = 一轮用时；float-delay = 起始相位（负值 → 一开始就在各自动画的中途） */
+  /* 图中 537×1075 @ (2,3)：整幅铺满的金色线条层 */
+  --star1-x: 50%;
+  --star1-y: 50%;
+  --star1-w: 746rpx;
+  --star1-opacity: 0.9;
+  --star1-float-x: 3rpx;
+  --star1-float-y: 6rpx;
+  --star1-float-rotate: 1deg;
+  --star1-float-duration: 7s;
+  --star1-float-delay: -0.4s;
+
+  /* 图中 361×417 @ (175,305)：右侧中部 */
+  --star2-x: 65.8%;
+  --star2-y: 47.5%;
+  --star2-w: 501rpx;
+  --star2-opacity: 0.85;
+  --star2-float-x: 7rpx;
+  --star2-float-y: 12rpx;
+  --star2-float-rotate: 2deg;
+  --star2-float-duration: 8.4s;
+  --star2-float-delay: -2.1s;
+
+  /* 图中 209×356 @ (281,229)：右上 */
+  --star3-x: 20%;
+  --star3-y: 17.7%;
+  --star3-w: 290rpx;
+  --star3-opacity: 0.75;
+  --star3-float-x: 6rpx;
+  --star3-float-y: 9rpx;
+  --star3-float-rotate: 1.5deg;
+  --star3-float-duration: 9.6s;
+  --star3-float-delay: -3.6s;
+
+  /* 图中 234×327 @ (88,612)：左下（月亮） */
+  --star4-x: 38%;
+  --star4-y: 71.8%;
+  --star4-w: 325rpx;
+  --star4-opacity: 0.8;
+  --star4-float-x: 8rpx;
+  --star4-float-y: 14rpx;
+  --star4-float-rotate: 3deg;
+  --star4-float-duration: 6.8s;
+  --star4-float-delay: -1.2s;
+
+  /* 图中 243×266 @ (14,438)：左侧中部 */
+  --star5-x: 75.1%;
+  --star5-y: 85.9%;
+  --star5-w: 338rpx;
+  --star5-opacity: 0.7;
+  --star5-float-x: 6rpx;
+  --star5-float-y: 11rpx;
+  --star5-float-rotate: 2deg;
+  --star5-float-duration: 10.4s;
+  --star5-float-delay: -5.2s;
+
+  /* ---- 以下为页面骨架，勿动 ---- */
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  /* 页面自身不滚动：内容滚动都发生在边界框内部 */
+  overflow: hidden;
+}
+
+/* 装饰舞台：等价于封面页那个「高度 = 一屏」的容器，
+   里面的图层用 absolute + 百分比定位，取到的就是整屏尺寸 */
+.memo__stage {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* ---------------- z0 背景：铺满整屏（与封面页 .cover__bg 一致） ---------------- */
+.memo__bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+/* ---------------- z1 遮罩：与封面页 .cover__scrim 同一条渐变 ---------------- */
+.memo__scrim {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(14, 18, 32, 0.3) 0%,
+    rgba(14, 18, 32, 0.45) 45%,
+    rgba(14, 18, 32, 0.72) 100%
+  );
+}
+
+/* ---------------- z2 星星装饰层（浮动特效沿用封面页，未做改动） ----------------
+   绝对定位 → 不参与布局流；pointer-events: none → 不拦截手势；
+   z-index: 2 → 在背景(0) / 遮罩(1) 之上、book.png(3) 之下
+   每个 var() 都带字面量兜底值，变量缺失时也能正常显示 */
+.star {
+  position: absolute;
+  left: var(--star-x, 50%);
+  top: var(--star-y, 50%);
+  width: var(--star-w, 120rpx);
+  opacity: var(--star-opacity, 1);
+  /* 以自身中心点定位：x / y 就是星星中心的位置 */
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 2;
+  /* 外层只做位移漂浮（幅度很小） */
+  animation: star-float var(--star-float-duration, 7s) ease-in-out var(--star-float-delay, 0s) infinite;
+}
+
+/* 高度交给 widthFix 按原图比例自动算出 → 始终保持原始宽高比，不会被压扁或拉长
+   内层只做极轻微的摇摆，与外层同周期同相位 */
+.star__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  animation: star-turn var(--star-float-duration, 7s) ease-in-out var(--star-float-delay, 0s) infinite;
+}
+
+/* 五颗星各自读取上面参数区里的一组变量（位置 / 大小 / 透明度 / 浮动节奏） */
+.star--1 {
+  --star-x: var(--star1-x, 50%);
+  --star-y: var(--star1-y, 50%);
+  --star-w: var(--star1-w, 746rpx);
+  --star-opacity: var(--star1-opacity, 0.9);
+  --star-float-x: var(--star1-float-x, 3rpx);
+  --star-float-y: var(--star1-float-y, 6rpx);
+  --star-float-rotate: var(--star1-float-rotate, 1deg);
+  --star-float-duration: var(--star1-float-duration, 7s);
+  --star-float-delay: var(--star1-float-delay, -0.4s);
+}
+
+.star--2 {
+  --star-x: var(--star2-x, 65.8%);
+  --star-y: var(--star2-y, 47.5%);
+  --star-w: var(--star2-w, 501rpx);
+  --star-opacity: var(--star2-opacity, 0.85);
+  --star-float-x: var(--star2-float-x, 7rpx);
+  --star-float-y: var(--star2-float-y, 12rpx);
+  --star-float-rotate: var(--star2-float-rotate, 2deg);
+  --star-float-duration: var(--star2-float-duration, 8.4s);
+  --star-float-delay: var(--star2-float-delay, -2.1s);
+}
+
+.star--3 {
+  --star-x: var(--star3-x, 20%);
+  --star-y: var(--star3-y, 17.7%);
+  --star-w: var(--star3-w, 290rpx);
+  --star-opacity: var(--star3-opacity, 0.75);
+  --star-float-x: var(--star3-float-x, 6rpx);
+  --star-float-y: var(--star3-float-y, 9rpx);
+  --star-float-rotate: var(--star3-float-rotate, 1.5deg);
+  --star-float-duration: var(--star3-float-duration, 9.6s);
+  --star-float-delay: var(--star3-float-delay, -3.6s);
+}
+
+.star--4 {
+  --star-x: var(--star4-x, 38%);
+  --star-y: var(--star4-y, 71.8%);
+  --star-w: var(--star4-w, 325rpx);
+  --star-opacity: var(--star4-opacity, 0.8);
+  --star-float-x: var(--star4-float-x, 8rpx);
+  --star-float-y: var(--star4-float-y, 14rpx);
+  --star-float-rotate: var(--star4-float-rotate, 3deg);
+  --star-float-duration: var(--star4-float-duration, 6.8s);
+  --star-float-delay: var(--star4-float-delay, -1.2s);
+}
+
+.star--5 {
+  --star-x: var(--star5-x, 75.1%);
+  --star-y: var(--star5-y, 85.9%);
+  --star-w: var(--star5-w, 338rpx);
+  --star-opacity: var(--star5-opacity, 0.7);
+  --star-float-x: var(--star5-float-x, 6rpx);
+  --star-float-y: var(--star5-float-y, 11rpx);
+  --star-float-rotate: var(--star5-float-rotate, 2deg);
+  --star-float-duration: var(--star5-float-duration, 10.4s);
+  --star-float-delay: var(--star5-float-delay, -5.2s);
+}
+
+/* 轻微、连续的漂浮：只有很小的位移，靠 ease-in-out 走成缓慢来回 */
+@keyframes star-float {
+  0% {
+    transform: translate(-50%, -50%) translate(0, 0);
+  }
+  25% {
+    transform: translate(-50%, -50%)
+      translate(var(--star-float-x, 6rpx), calc(var(--star-float-y, 10rpx) * -0.6));
+  }
+  50% {
+    transform: translate(-50%, -50%) translate(0, calc(var(--star-float-y, 10rpx) * -1));
+  }
+  75% {
+    transform: translate(-50%, -50%)
+      translate(calc(var(--star-float-x, 6rpx) * -1), calc(var(--star-float-y, 10rpx) * -0.6));
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(0, 0);
+  }
+}
+
+/* 极轻微的摇摆，与位移同步；即使不生效也不影响漂浮本身 */
+@keyframes star-turn {
+  0% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(var(--star-float-rotate, 2deg));
+  }
+  50% {
+    transform: rotate(0deg);
+  }
+  75% {
+    transform: rotate(calc(var(--star-float-rotate, 2deg) * -1));
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+/* ---------------- z3 book.png 图片图层 ----------------
+   left / bottom 直接就是「左边缘到屏幕左边」「下边缘到屏幕下边」的距离；
+   宽、高各自独立：宽 = --books-w × --books-scale，高 = --books-h × --books-scale
+   → 只改 --books-h 就能在宽度不变的前提下拉伸 / 压缩长边（mode=scaleToFill）
+   pointer-events: none → 不吃任何点击 */
+.memo__books {
+  position: absolute;
+  left: var(--books-left, 65rpx);
+  bottom: var(--books-bottom, 150rpx);
+  width: calc(var(--books-w, 620rpx) * var(--books-scale, 1));
+  height: calc(var(--books-h, 1240rpx) * var(--books-scale, 1));
+  opacity: var(--books-opacity, 0.9);
+  transform-origin: center center;
+  transform: rotate(var(--books-rotate, 0deg));
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* ===================== z4 内容边界框：位置与尺寸写在参数区 =====================
+   位置：left / bottom（默认），或 left / top + bottom（把 --frame-h 设成 auto 时）
+   框内只有滚动区（flex:1 撑满整个框）；按钮栏已独立成 z5 的 .memo__actions */
+.memo__frame {
+  position: fixed;
+  left: var(--frame-left, 24rpx);
+  bottom: var(--frame-bottom, 24rpx);
+  /* 上边距：给具体数值 + --frame-h: auto → 框被固定在「距顶 / 距底」之间，高度自动 */
+  top: var(--frame-top, auto);
+  width: var(--frame-w, 702rpx);
+  height: var(--frame-h, 1080rpx);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--frame-radius, 24rpx);
+  /* 辅助描边开关：--frame-debug 为 0 时边框宽度为 0 → 完全看不见；改成 1 即显示虚线框 */
+  border: calc(var(--frame-debug, 0) * 2rpx) dashed rgba(255, 255, 255, 0.65);
+  box-sizing: border-box;
+}
+
+/* 滚动区：标题 + 三张功能卡。min-height: 0 是 flex 子项能正常滚动的必要条件 */
+.memo__scroll {
+  flex: 1;
+  min-height: 0;
+  padding: var(--frame-pad, 24rpx);
+}
+
+/* 按钮栏：脱离边界框的独立图层，位置与宽度由参数区 ③ 控制（z5，压在所有内容之上） */
+.memo__actions {
+  position: fixed;
+  left: var(--actions-left, 85rpx);
+  bottom: calc(var(--actions-bottom, 150rpx) + env(safe-area-inset-bottom));
+  width: var(--actions-w, 500rpx);
+  z-index: 5;
+  display: flex;
+  flex-direction: row;
+  /* 辅助描边开关：--actions-debug 为 0 时边框宽度为 0 → 完全看不见；改成 1 即显示虚线框 */
+  border: calc(var(--actions-debug, 0) * 2rpx) dashed rgba(255, 255, 255, 0.65);
+  box-sizing: border-box;
+}
+
+.memo__btn {
+  flex: 1;
+}
+
+.memo__btn + .memo__btn {
+  margin-left: var(--actions-gap, 24rpx);
+}
+
+/* 按钮视觉：无描边 + 指定底色 + 统一字色，并轻微上下左右漂浮
+   （用 .memo__actions 后代选择器，优先级高于 app.wxss 的 .btn--ghost / .btn--primary，
+     所以底色 / 边框 / 字色都能稳定覆盖） */
+.memo__actions .memo__btn {
+  border: none;
+  color: #95886a;
+  animation: memo-btn-float var(--btn-float-duration, 5.6s) ease-in-out infinite;
+}
+
+.memo__actions .memo__btn--map {
+  background: #131723;
+}
+
+.memo__actions .memo__btn--save {
+  background: #293749;
+  /* 与 Map 错开半轮：两个按钮飘起来不同步，看着更自然 */
+  animation-delay: calc(var(--btn-float-duration, 5.6s) / -2);
+}
+
+/* 轻微漂浮：只有几 rpx 的位移，靠 ease-in-out 走成缓慢来回 */
+@keyframes memo-btn-float {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(var(--btn-float-x, 6rpx), calc(var(--btn-float-y, 8rpx) * -0.6));
+  }
+  50% {
+    transform: translate(0, calc(var(--btn-float-y, 8rpx) * -1));
+  }
+  75% {
+    transform: translate(calc(var(--btn-float-x, 6rpx) * -1), calc(var(--btn-float-y, 8rpx) * -0.6));
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+.memo__meta {
+  padding: 8rpx 8rpx 24rpx;
+}
+
+/* 标题居中：text 组件默认是行内元素，必须 display:block 后 text-align:center 才会对整行生效 */
+.memo__title {
+  display: block;
+  font-size:40rpx;
+  font-weight: 400;
+  text-align: center;
+  color: #A25B5A;
+  text-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.55);
+}
+
+.memo__sub {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  text-align: center;
+  color: #435A7D;
+  text-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.55);
+}
+
+/* 卡片：浅色底 + 深色字，清楚压在 book.png 之上，可读性不受背景影响 */
+.card {
+  background: #dec5b3;
+  border-radius: 24rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+}
+
+.card__head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+.card__title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.card__count {
+  font-size: 22rpx;
+  color: #6b7280;
+}
+
+.card__textarea {
+  width: 900%;
+  min-height: 180rpx;
+  font-size: 28rpx;
+  line-height: 44rpx;
+  color: #1f2937;
+}
+
+.card__placeholder {
+  color: #9ca3af;
+}
+
+.grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.grid__item {
+  position: relative;
+  width: 200rpx;
+  height: 200rpx;
+  margin: 0 16rpx 16rpx 0;
+}
+
+.grid__img {
+  width: 100%;
+  height: 100%;
+  border-radius: 16rpx;
+}
+
+.grid__del {
+  position: absolute;
+  top: -8rpx;
+  right: -8rpx;
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.75);
+  color: #ffffff;
+  font-size: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.grid__add,
+.add-video {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 16rpx;
+  border: 2rpx dashed #dbab88;
+  background: #dbab88;
+  color: #6b7280;
+  font-size: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-video {
+  width: 100%;
+  height: 160rpx;
+  font-size: 28rpx;
+}
+
+.video-box__player {
+  width: 100%;
+  height: 360rpx;
+  border-radius: 16rpx;
+}
+
+.video-box__del {
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  color: #e5484d;
+  text-align: right;
+}
