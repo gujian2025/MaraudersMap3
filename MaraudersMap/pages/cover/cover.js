@@ -15,6 +15,73 @@ const MAP_FADE_IN_MS = 900 // 地图视图淡入时长（ms），与 cover.wxss 
 const MAP_FADE_OUT_MS = 600 // 地图视图淡出时长（ms），与 cover.wxss 的基础态 transition 一致
 const FOOTPRINT_DELAY = 0 // 进入地图视图后多久脚印重新出现（ms）；0 = 地图视图里一直不出现脚印
 
+/* 「我的位置」脚印 + 行走尾迹 —— 全部用原生 marker 渲染
+   为什么不画在覆盖层上：regionchange 只在地势变化开始 / 结束时各回调一次，
+   手势进行中没有任何回调，覆盖层坐标必然是旧的 → 缩放时脚印与地图脱节、手势结束才跳过去。
+   marker 直接绑经纬度，由原生地图绘制，缩放 / 拖动 / 旋转全程与地图严格同步（零偏移、零突变），
+   尾迹也因此天然「原地出现、原地消失」，不会瞬移。
+   代价：透明度 / 位移 / 角度必须由 JS 定时刷新（见 PAWN_TICK_MS）。
+
+   ============================ 可调参数 ============================
+   【静止 / 本体两只脚】—— 站在原地时的那只「脚印对」
+   PAWN_GAP_RPX     两脚并排间距（各向左右让出一半，两脚中点恒等于定位点）
+                    ⚠ 想「左右不重叠」就要 ≥ 脚印宽度 PAWN_W_RPX(34)，默认 38
+   PAWN_STEP_RPX    步幅：单只脚向前 / 向后迈出的距离（一脚在前、一脚在后、位移相反
+                    → 定位点恒在两脚几何中心）。想「前后不重叠」就要 ≥ 脚印长的一半(30)，
+                    默认 14 是「迈步中两脚部分交叠」的观感
+   PAWN_BLINK_MS    静止时单只脚闪烁一轮的时长（两只脚错开半个周期 → 交替闪烁，不同时亮）
+   PAWN_CYCLE_MS    移动时单只脚一个落步周期的时长（两只脚同样错开半周期 → 交替落步）
+   PAWN_TILT_DEG    单只脚的角度偏差幅度：每半个周期重新随机一次，避免两脚死板平行
+
+   【行走尾迹】—— 走路时留在身后的那串脚印
+   TRAIL_GAP_RPX    ★ 前后间距（参考步速下相邻两枚的屏幕间距，rpx）：调疏密就改它
+                    实际间距 = TRAIL_GAP_RPX ×（当前速度 / TRAIL_SPEED_REF_MPS），
+                    再夹到 [脚印长(60) + TRAIL_GAP_PAD_RPX, TRAIL_GAP_MAX_RPX]
+                    → 慢：贴近下限（仍然不重叠）；快：间距拉大、尾巴更长（体现速度快慢）；
+                      上限兜住「跑太快 / GPS 跳变」不会把脚印拉成瞬移
+   TRAIL_SIDE_RPX   左右间距（左右脚交替侧偏），下限 =（脚印宽 34 + 4）/2 = 19rpx → 左右不重叠
+   TRAIL_SPEED_REF_MPS  参考步速（m/s）：间距按「速度 ÷ 参考步速」缩放（默认 1.4 ≈ 正常步行）
+   TRAIL_GAP_MAX_RPX    前后间距上限（rpx）
+   TRAIL_LIFE_MS    单枚尾迹存活时长 = 尾巴能拖多长（调大 → 尾巴更长；2600 = 封面 foot-fade 节奏）
+   TRAIL_MAX        同时存在的枚数上限（尾迹长度的另一道上限）
+   TRAIL_JUMP_M     相邻两次定位跳变超过这么多米 = GPS 漂移，跳过不留痕（防止一串假脚印）
+   TRAIL_PEAK / TRAIL_MID  峰值 / 中段不透明度（暗淡程度；改成 0.85 / 0.55 即与封面一样亮）
+   TRAIL_TILT_DEG   每枚尾迹的角度偏差幅度（随机，不让尾迹排成一条直线）
+   ================================================================= */
+const MOVE_SPEED = 0.6 // 判定「正在移动」的速度阈值（m/s）
+const MOVE_DIST = 0.8 // 判定「正在移动」的相邻两次定位位移阈值（m）
+const STOP_HOLD_MS = 1500 // 连续这么久没动才算静止（避免 GPS 抖动来回切换）
+const LOC_SYNC_MIN_MS = 300 // 定位回调的最小处理间隔（ms）——回调可能很密，节流后再 setData
+
+const PAWN_GAP_RPX = 38
+const PAWN_STEP_RPX = 14
+const PAWN_BLINK_MS = 2400
+const PAWN_CYCLE_MS = 1240
+const PAWN_TILT_DEG = 4
+const TRAIL_GAP_RPX = 76
+const TRAIL_SPEED_REF_MPS = 1.4
+const TRAIL_GAP_MAX_RPX = 240
+const TRAIL_GAP_PAD_RPX = 4
+const TRAIL_SIDE_RPX = 20
+const TRAIL_JUMP_M = 15
+const TRAIL_LIFE_MS = 15000 // 尾巴要「向后延伸」就得活得久些（2600 只够同时看到 1 枚）
+const TRAIL_PEAK = 0.45
+const TRAIL_MID = 0.28
+const TRAIL_TILT_DEG = 4
+const TRAIL_MAX = 16
+const PAWN_TICK_MS = 60 // 脚印的刷新间隔（ms）：越小越顺滑、越费性能（调大更省电）
+const PAWN_W_RPX = 34 // 脚印尺寸，与 app.wxss 的 .footprint 一致（贴图由 _tools/make-footprint.js 生成）
+const PAWN_H_RPX = 60
+const PAWN_ICON = '/assets/images/footprint.png'
+const ME_ID_FOOT_L = 800001 // 两只本体的 marker id（避开节点 id 与 DRAFT_ID_BASE）
+const ME_ID_FOOT_R = 800002
+const TRAIL_ID_BASE = 810000 // 尾迹 marker id 起点
+const ZOOM_SETTLE_MS = 600 // 我们主动改过缩放后的静默期：这段时间内的 regionchange 不算「用户在缩放」
+/* 缩放时是否自动把视野中心切到「我的位置」（= 以脚印为中心缩放）。
+   需求变更：缩放要保持当前视图中心 / 缩放锚点不变，不再自动回到脚印 → 置 false。
+   centerOnMe() 方法本身保留备用（以后接「定位」按钮可复用），只是不再自动调用 */
+const AUTO_CENTER_ON_ZOOM = false
+
 /* 上滑后羊皮纸「等比放大到铺满整屏」所需的倍率。
    纸面当前宽度 = min(屏宽 × PARCHMENT_W, 屏高 × PARCHMENT_MAX_VH) × PARCHMENT_SCALE，
    这三个数值必须与 cover.wxss 参数区的 --parchment-w / --parchment-max-w / --parchment-scale 一致。
@@ -181,6 +248,13 @@ Page({
     walkVisible: true, // 脚印层是否可见（上滑后在地图视图里保持隐藏）
     footprints: [], // 正在展示的脚印
 
+    /* 「我的位置」脚印：数据只留「怎么画」需要的三项，坐标由 marker 直接绑经纬度
+       visible = 是否拿到了定位（没定位就不画）
+       rotate  = 朝向角（度）= 手机朝向 + 地图旋转角
+       moving  = 是否正在移动（true = 交替落步 + 留尾迹，false = 并排闪烁、不留尾迹）
+       ⚠ 具体 marker 由 buildMeMarkers() 现算，不进 data —— 尾迹有寿命，每帧都在变 */
+    me: { visible: false, rotate: 0, moving: false },
+
     /* ---------------- 地图视图（同页内切换） ---------------- */
     inMap: false, // 是否已进入地图视图
     mapVisible: false, // map 是否已渲染
@@ -230,6 +304,7 @@ Page({
     this._walk = createWalker(this)
     this._timers = [] // 视图切换相关
     this._viewTimers = [] // 进入地图视图后的延时（脚印），退出时统一清掉
+    this._baseMarkers = [] // 不含脚印的 marker（节点 / 草稿），脚印每帧拼在它后面
   },
 
   clearViewTimers() {
@@ -243,19 +318,24 @@ Page({
 
   onShow() {
     // 从备忘录页返回：标记点状态（是否已记录）随之更新
-    if (this.data.inMap) this.refresh()
+    if (this.data.inMap) {
+      this.refresh()
+      this.startMe() // 回到地图视图：定位 / 罗盘监听重新挂上
+    }
     // 脚印可见时才继续行走（从备忘录页返回时恢复）
     if (this.data.walkVisible && this._walk) this._walk.start()
   },
 
   onHide() {
     if (this._walk) this._walk.stop()
+    this.stopMe() // 页面不可见即停掉定位 / 罗盘，省电
   },
 
   onUnload() {
     this._startY = 0
     clearTimeout(this._overlayTimer)
     if (this._walk) this._walk.stop()
+    this.stopMe()
     ;(this._timers || []).forEach((timer) => clearTimeout(timer))
     this._timers = []
     this.clearViewTimers()
@@ -309,6 +389,8 @@ Page({
             this.setData({ entered: true })
             // map 已渲染：贴手绘图覆盖层，并居中 + 调整视野使其完整可见
             this.applyOverlay()
+            // 「我的位置」脚印：定位 + 罗盘监听从这一刻开始
+            this.startMe()
           }, MAP_CREATE_GAP)
         )
         // ③ 脚印在上滑时已随文字淡出，进入地图视图后保持隐藏
@@ -335,6 +417,7 @@ Page({
 
     // 退出前结束绘制：路径草稿先落库，按钮复位
     if (this.data.mode === MODE_PATH) this.commitDraft(true)
+    this.stopMe() // 回到封面：脚印不再需要，定位 / 罗盘一并停掉
 
     // ① 地图视图内容整体淡出（600ms）
     this.setData({ entered: false })
@@ -507,9 +590,13 @@ Page({
   },
 
   /**
-   * 限制拖拽：视野中心只能在「图窗仍完全落在手绘图内」的区间里移动，
+   * 限制拖拽（需求 1：地图不得移到手绘图边界之外）：
+   * 视野中心只能在「图窗仍完全落在手绘图内」的区间里移动，
    * 拖到边上就把视野拉回最近的合法位置（不用 MapContext.setBoundary，免得与入场视野打架）
-   * 注：入场时图窗尺寸 = 手绘图尺寸，此时合法区间退化为图中心 → 根本上拖不动
+   * 注 1：入场时图窗尺寸 = 手绘图尺寸，此时合法区间退化为图中心 → 根本上拖不动，
+   *       放大后图窗比手绘图小，才有了可在图片内移动的空间
+   * 注 2：这里不再对「以我的位置为中心」做任何豁免 —— 边界锁定优先级最高，
+   *       任何时候都不允许露出图片之外的地图内容
    */
   clampView(center, scale, rotate) {
     const b = OVERLAY.bounds
@@ -530,7 +617,16 @@ Page({
     const maxLng = b.northeast.longitude - dLng
     const minLat = b.southwest.latitude + dLat
     const maxLat = b.northeast.latitude - dLat
-    if (minLng > maxLng || minLat > maxLat) return // 手绘图已完全包住图窗，无需再限
+    if (minLng > maxLng || minLat > maxLat) {
+      // 区间为空 = 图窗比手绘图还大（旋转 / 缩放的过渡态）：夹取无解，只能靠 minScale 抬高缩放。
+      // 此时至少保证中心不跑到图片之外，别让用户看到图外内容（正常状态下中心本就在图内，不会触发）
+      const lat2 = Math.min(b.northeast.latitude, Math.max(b.southwest.latitude, center.latitude))
+      const lng2 = Math.min(b.northeast.longitude, Math.max(b.southwest.longitude, center.longitude))
+      if (lat2 !== center.latitude || lng2 !== center.longitude) {
+        this.setData({ latitude: lat2, longitude: lng2 })
+      }
+      return
+    }
     const lng = Math.min(maxLng, Math.max(minLng, center.longitude))
     const latitude = Math.min(maxLat, Math.max(minLat, center.latitude))
     if (lng === center.longitude && latitude === center.latitude) return
@@ -548,7 +644,9 @@ Page({
     const cover = coverScale(OVERLAY.bounds, win.w, win.h, rotate)
     const min = Math.max(cover, this._entryScale || cover)
     if (min !== this.data.minScale || this.data.scale < min) {
-      this.setData({ minScale: min, scale: Math.max(min, this.data.scale) })
+      const scale = Math.max(min, this.data.scale)
+      this._scaleSetAt = Date.now() // 这是我们主动改的缩放，别当成「用户在缩放」
+      this.setData({ minScale: min, scale })
     }
   },
 
@@ -563,15 +661,434 @@ Page({
     }
     read('getRotate', (r) => {
       const rotate = r && typeof r.rotate === 'number' ? r.rotate : this.data.rotate
+      this._meRotate = rotate // 地图旋转角：脚印朝向要跟着一起转
+      this.syncMeHeading()
       this.applyViewConstraint(rotate) // 旋转后重算「手绘图盖住图窗」所需的缩放下限
       read('getScale', (sr) => {
         const scale = sr && typeof sr.scale === 'number' ? sr.scale : this.data.scale
+        // 识别「用户在缩放」（判定顺序：① 事件自带 causedBy='scale'；② 否则看缩放级别是否真的变了。
+        // _lastScale 为 null = 入场视野还没落定；刚被 applyViewConstraint 改过则跳过）
+        // ⚠ 需求变更：识别到缩放后不再自动把中心切到「我的位置」——
+        //   缩放保持当前视图中心 / 缩放锚点不变（置 AUTO_CENTER_ON_ZOOM = true 可恢复旧行为）
+        const byScale = (e && e.causedBy === 'scale') || (e && e.detail && e.detail.causedBy === 'scale')
+        const settled = Date.now() - (this._scaleSetAt || 0) > ZOOM_SETTLE_MS
+        const zoomed =
+          AUTO_CENTER_ON_ZOOM &&
+          (byScale || (this._lastScale != null && settled && Math.abs(scale - this._lastScale) > 0.01))
+        this._lastScale = scale
+        this._liveScale = scale // 脚印的 px→米 换算要用「当前」缩放，不能停在入场级别
+        if (zoomed && this.centerOnMe()) return
         read('getCenterLocation', (cr) => {
           if (!cr || typeof cr.latitude !== 'number' || typeof cr.longitude !== 'number') return
           this.clampView({ latitude: cr.latitude, longitude: cr.longitude }, scale, rotate)
         })
       })
     })
+  },
+
+  /* ---------------- 「我的位置」脚印 + 行走尾迹（原生 marker） ----------------
+     坐标一律用经纬度，交给原生地图绘制 —— 缩放 / 拖动 / 旋转时与地图严格同步，
+     不会出现「缩放中偏移、手势结束才跳过去」的问题；尾迹也天然原地不动、不瞬移。 */
+
+  /**
+   * 启动定位 + 罗盘 + 脚印刷新：只在地图视图里开着，退出 / 隐藏即停（省电，也不会在封面误触发）
+   *   罗盘 → 脚印朝向（手机朝哪，脚印朝哪）
+   *   定位 → 脚印位置 + 是否移动（速度 / 位移）
+   *   定时 → 透明度 / 迈步 / 尾迹淡出（marker 不支持 CSS 动画，只能按帧重算）
+   */
+  startMe() {
+    if (this._meStarted) return
+    if (!this.data.inMap || !this.data.mapVisible) return
+    this._meStarted = true
+    this._meRotate = Number(this.data.rotate) || 0
+    this._meHeading = 0
+    this._meMoveAt = 0
+    this._meTrail = [] // 尾迹：{ id, latitude, longitude, rotate, tilt, side, t0 }
+    this._meTrailGeo = null // 上一枚尾迹的落点：用来量「走过多少米了」
+    this._trailAcc = 0 // 距离累积器：满一个「前后间距」才落一枚
+    this._meSpeed = 0 // 平滑后的速度（m/s）：决定前后间距
+    this._trailPruneScale = 0
+    this._trailSide = -1
+    this._trailSeq = 0
+    this._tiltL = 0
+    this._tiltR = 0
+    this._tiltAt = 0
+    this._liveScale = this._liveScale || Number(this.data.scale) || 16
+
+    if (wx.onCompassChange) {
+      this._compassHandler = (res) => {
+        if (!res || typeof res.direction !== 'number') return
+        this._meHeading = res.direction // 0 = 正北，顺时针增大
+        this.syncMeHeading()
+      }
+      wx.onCompassChange(this._compassHandler)
+    }
+    if (wx.startLocationUpdate) {
+      wx.startLocationUpdate({
+        fail: (err) => console.log('[me] startLocationUpdate 失败', (err && err.errMsg) || err),
+      })
+    }
+    if (wx.onLocationChange) {
+      this._locationHandler = (res) => this.onMeLocation(res)
+      wx.onLocationChange(this._locationHandler)
+    }
+    // getLocation 兜底：无授权 / 低版本不回调 onLocationChange 时，至少先拿到一次位置
+    this.fetchMeLocation()
+    this.startMeTick()
+  },
+
+  stopMe() {
+    if (!this._meStarted) return
+    this._meStarted = false
+    if (this._compassHandler && wx.offCompassChange) wx.offCompassChange(this._compassHandler)
+    if (this._locationHandler && wx.offLocationChange) wx.offLocationChange(this._locationHandler)
+    if (wx.stopLocationUpdate) wx.stopLocationUpdate()
+    this._compassHandler = null
+    this._locationHandler = null
+    this._meTrail = []
+    this._meTrailGeo = null
+    this._trailAcc = 0
+    this._meSpeed = 0
+    this._followMe = false
+    // 先落 visible=false（this.data 同步更新），再停帧重绘 —— 这样脚印会被一起摘掉
+    this.setData({ 'me.visible': false, 'me.moving': false })
+    this.stopMeTick()
+  },
+
+  fetchMeLocation() {
+    if (!wx.getLocation) return
+    wx.getLocation({
+      type: 'gcj02',
+      isHighAccuracy: true,
+      highAccuracyExpireTime: 4000,
+      success: (res) => this.onMeLocation(res),
+      fail: (err) => console.log('[me] getLocation 失败', (err && err.errMsg) || err),
+    })
+  },
+
+  /** 一次定位回调：更新位置，并按速度 / 位移判定是否在移动 */
+  onMeLocation(res) {
+    if (!res || typeof res.latitude !== 'number' || typeof res.longitude !== 'number') return
+    const now = Date.now()
+    const prevAt = this._meAt || 0
+    if (this._meAt && now - this._meAt < LOC_SYNC_MIN_MS) return // 回调可能很密，节流
+    this._meAt = now
+
+    const point = { latitude: res.latitude, longitude: res.longitude }
+    const prev = this._me
+    this._me = point
+
+    // 速度（m/s）：优先用定位自带 speed，否则用「位移 ÷ 间隔」算；再做一次平滑（GPS 抖得厉害）
+    // 只影响尾迹的前后间距：走得快间距大、走得慢贴近下限
+    const dt = prevAt ? (now - prevAt) / 1000 : 0
+    const dv = prev && dt > 0.3 ? geo.metersBetween(prev, point) / dt : 0
+    const v = typeof res.speed === 'number' && res.speed > 0 ? res.speed : dv
+    this._meSpeed = this._meSpeed ? this._meSpeed * 0.6 + v * 0.4 : v
+
+    let moving = !!this.data.me.moving
+    if (typeof res.speed === 'number' && res.speed >= MOVE_SPEED) {
+      moving = true
+      this._meMoveAt = now
+    } else if (prev && geo.metersBetween(prev, point) >= MOVE_DIST) {
+      moving = true
+      this._meMoveAt = now
+    }
+    // 停够久才算静止：走走停停时不会来回切换
+    if (moving && this._meMoveAt && now - this._meMoveAt > STOP_HOLD_MS) moving = false
+
+    const patch = {}
+    if (!this.data.me.visible) patch['me.visible'] = true
+    if (moving !== this.data.me.moving) {
+      patch['me.moving'] = moving
+      // 起步的瞬间把「上一枚尾迹落点」清空 → 立刻落第一枚；停下则从此不再落点
+      if (moving) this._meTrailGeo = null
+    }
+    if (Object.keys(patch).length) this.setData(patch)
+
+    this.dropTrailPrint(moving, point)
+  },
+
+  /**
+   * 把视野中心切到「我的位置」（脚印所在处）
+   * ⚠ 目前没有任何地方自动调用它：缩放要保持当前视图中心 / 缩放锚点不变，
+   *   不再自动回到脚印（见 AUTO_CENTER_ON_ZOOM）。方法保留备用 —— 以后接「定位」按钮可直接复用。
+   * 注：_followMe 只是状态标记，不再豁免 clampView —— 边界锁定优先级最高，
+   *     若我的位置落在手绘图之外，下一次 clampView 仍会把视野拉回图片内。
+   * @returns {boolean} 是否已接管中心
+   */
+  centerOnMe() {
+    const me = this._me
+    if (!me || !this.data.inMap) return false
+    this._followMe = true
+    this.setData({ latitude: me.latitude, longitude: me.longitude })
+    return true
+  },
+
+  /* ---------- 脚印刷新（marker 没有 CSS 动画，透明度 / 迈步都由这里按帧算） ---------- */
+
+  startMeTick() {
+    if (this._meTick) return
+    this._tickT0 = Date.now()
+    this._meTick = setInterval(() => this.tickMeMarkers(), PAWN_TICK_MS)
+  },
+
+  stopMeTick() {
+    if (this._meTick) {
+      clearInterval(this._meTick)
+      this._meTick = null
+    }
+    this.paintMeMarkers() // 立刻把脚印从 markers 里摘掉
+  },
+
+  tickMeMarkers() {
+    if (!this.data.inMap || !this.data.mapVisible) return
+    const now = Date.now()
+    // 到寿命就移除 → 尾迹「原地消失」，全程不移动
+    if (this._meTrail && this._meTrail.length) {
+      this._meTrail = this._meTrail.filter((t) => now - t.t0 <= TRAIL_LIFE_MS)
+    }
+    // 缩放级别一变（尤其是缩小）就复查一次间距：被挤到重叠的直接剔掉
+    const scale = this._liveScale || Number(this.data.scale) || 16
+    if (scale !== this._trailPruneScale) {
+      this._trailPruneScale = scale
+      this.pruneTrailOverlap()
+    }
+    this.jitterTilt(now)
+    this.paintMeMarkers()
+  },
+
+  /** 角度偏差：每半个周期重新随机一次（静止按闪烁半周期、移动按落步半周期） */
+  jitterTilt(now) {
+    const period = (this.data.me.moving ? PAWN_CYCLE_MS : PAWN_BLINK_MS) / 2
+    if (now - (this._tiltAt || 0) < period) return
+    this._tiltAt = now
+    const jitter = () => (Math.random() * 2 - 1) * PAWN_TILT_DEG
+    this._tiltL = jitter()
+    this._tiltR = jitter()
+  },
+
+  /** 把「基础 marker（节点 / 草稿）」与「脚印 marker」合并后写回 */
+  paintMeMarkers() {
+    if (!this._baseMarkers) return
+    this.setData({ markers: this._baseMarkers.concat(this.buildMeMarkers()) })
+  },
+
+  /** rpx → px：marker 的 width / height 只认 px */
+  rpxPx(v) {
+    if (!this._rpxRatio) {
+      const info = wx.getWindowInfo ? wx.getWindowInfo() : {}
+      this._rpxRatio = (info.windowWidth || 375) / 750
+    }
+    return v * this._rpxRatio
+  },
+
+  /** 当前缩放下 1px 代表多少米（与 pictureSize 用的是同一套墨卡托近似） */
+  metersPerPixel(scale, lat) {
+    const cos = Math.cos(((lat || 0) * Math.PI) / 180)
+    return (EQUATOR_MPP * cos) / Math.pow(2, scale)
+  },
+
+  /**
+   * 从定位点偏移若干「屏幕像素」得到新经纬度
+   *   forward > 0 → 沿手机朝向往前；side > 0 → 朝右手边
+   * 像素先按当前缩放换算成米，所以任何缩放级别下脚印的视觉间距都不变；
+   * 两脚的 forward / side 永远大小相等、方向相反 → 定位点恒在两脚几何中心
+   */
+  offsetByScreen(point, forwardPx, sidePx, scale) {
+    const mpp = this.metersPerPixel(scale, point.latitude)
+    const rad = ((this._meHeading || 0) * Math.PI) / 180
+    const fE = Math.sin(rad) // 朝向单位向量（北 = 0，顺时针 → 东为正）
+    const fN = Math.cos(rad)
+    const rE = Math.cos(rad) // 右手边 = 朝向顺时针 90°
+    const rN = -Math.sin(rad)
+    return geo.offsetMeters(
+      point,
+      (fE * forwardPx + rE * sidePx) * mpp,
+      (fN * forwardPx + rN * sidePx) * mpp
+    )
+  },
+
+  /** 尾迹透明度：0 → 峰值(10%) → 中段(45%) → 0，节奏与封面 foot-fade 一致，只是更暗 */
+  trailAlpha(p) {
+    if (p <= 0) return 0
+    if (p < 0.1) return TRAIL_PEAK * (p / 0.1)
+    if (p < 0.45) return TRAIL_PEAK + (TRAIL_MID - TRAIL_PEAK) * ((p - 0.1) / 0.35)
+    return TRAIL_MID * (1 - (p - 0.45) / 0.55)
+  },
+
+  /** 一只脚 → 一个 marker（位置由「定位点 + 屏幕偏移」算出，图形默认朝上靠 rotate 转向） */
+  meFootMarker(id, forwardPx, sidePx, alpha, rotate, scale) {
+    const pos = this.offsetByScreen(this._me, forwardPx, sidePx, scale)
+    return {
+      id,
+      latitude: pos.latitude,
+      longitude: pos.longitude,
+      iconPath: PAWN_ICON,
+      width: this.rpxPx(PAWN_W_RPX),
+      height: this.rpxPx(PAWN_H_RPX),
+      anchor: { x: 0.5, y: 0.5 }, // 锚点 = 图形中心 → 几何中心与经纬度严格重合
+      rotate: Math.round(((rotate % 360) + 360) % 360),
+      alpha: Math.max(0.05, Math.min(1, alpha)),
+      zIndex: 99,
+    }
+  },
+
+  /**
+   * 生成脚印 marker 列表：两只本体 + 若干尾迹
+   * 本体：两脚相对定位点严格对称（左右各让 gap/2，前后各让 step/2 且方向相反；
+   *       迈步时一脚在前、一脚在后）→ 无论怎么缩放 / 走动，定位点恒在两脚几何中心
+   */
+  buildMeMarkers() {
+    const me = this._me
+    if (!me || !this.data.me.visible || !this.data.inMap || !this.data.mapVisible) return []
+    const now = Date.now()
+    const moving = !!this.data.me.moving
+    const period = moving ? PAWN_CYCLE_MS : PAWN_BLINK_MS
+    const ph = ((now - (this._tickT0 || now)) % period) / period
+    const c = Math.cos(ph * Math.PI * 2) // +1 = 左脚在前 / 最亮
+    const step = moving ? this.rpxPx(PAWN_STEP_RPX) : 0
+    const halfGap = this.rpxPx(PAWN_GAP_RPX) / 2
+    const base = Number(this.data.me.rotate) || 0
+    const scale = this._liveScale || Number(this.data.scale) || 16
+    // 静止 0.65±0.25（0.40~0.90）缓慢闪烁；移动 0.65±0.20（0.45~0.85）随落步明暗。
+    // 两脚相位相反（一个 cos、一个 -cos）→ 交替闪烁 / 交替落步，绝不同时亮
+    const amp = moving ? 0.2 : 0.25
+
+    const tiltL = this._tiltL || 0
+    const tiltR = this._tiltR || 0
+    const list = [
+      this.meFootMarker(ME_ID_FOOT_L, -step * c, -halfGap, 0.65 + amp * c, base + tiltL, scale),
+      this.meFootMarker(ME_ID_FOOT_R, step * c, halfGap, 0.65 - amp * c, base + tiltR, scale),
+    ]
+
+    // 尾迹：落点定死（只改透明度）→ 原地出现、原地消失，绝不移动 / 瞬移
+    // 侧偏下限 =（脚印宽 + 余量）/2 → 左右脚在横向也留得出缝，不会左右重叠
+    const sidePx = this.rpxPx(Math.max(TRAIL_SIDE_RPX, (PAWN_W_RPX + TRAIL_GAP_PAD_RPX) / 2))
+    const trail = this._meTrail || []
+    trail.forEach((t) => {
+      const alpha = this.trailAlpha((now - t.t0) / TRAIL_LIFE_MS)
+      if (alpha <= 0.01) return
+      const pos = this.offsetByScreen(t, 0, t.side * sidePx, scale)
+      list.push({
+        id: TRAIL_ID_BASE + t.id,
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        iconPath: PAWN_ICON,
+        width: this.rpxPx(PAWN_W_RPX),
+        height: this.rpxPx(PAWN_H_RPX),
+        anchor: { x: 0.5, y: 0.5 },
+        rotate: Math.round(((t.rotate + t.tilt) % 360 + 360) % 360),
+        alpha,
+        zIndex: 98, // 压在两只本体（99）之下
+      })
+    })
+    return list
+  },
+
+  /**
+   * 相邻两枚尾迹之间要隔多少米（= 屏幕间距换成米）
+   * 为什么用「屏幕间距」而不是固定米数：脚印是固定像素大小的贴图，而本图 1px ≈ 2m（入场级），
+   * 按 0.7m 的真实步幅落点只有 0.34px —— 脚印会整片叠在一起（就是之前那个「重合」问题）。
+   * 所以间距以脚印自身尺寸为基准（rpx），再乘「速度 / 参考步速」：
+   *   走得快 → 间距变大（尾巴更长）；走得慢 → 贴着下限（仍不会重叠）
+   * 下限 = 脚印长度 + TRAIL_GAP_PAD_RPX，上限 = TRAIL_GAP_MAX_RPX
+   */
+  trailGapMeters() {
+    const v = this._meSpeed || 0
+    const gapRpx = TRAIL_GAP_RPX * (v / TRAIL_SPEED_REF_MPS)
+    const floorRpx = PAWN_H_RPX + TRAIL_GAP_PAD_RPX // 比脚印还长一点点 → 前后永远不重叠
+    const px = this.rpxPx(Math.min(TRAIL_GAP_MAX_RPX, Math.max(floorRpx, gapRpx)))
+    const lat = this._me ? this._me.latitude : 0
+    // 用「当前缩放」换算：保证落点那一刻屏幕上的间距就是我们设定的值
+    const scale = this._liveScale || Number(this.data.scale) || 16
+    return px * this.metersPerPixel(scale, lat)
+  },
+
+  /**
+   * 行走尾迹落点：
+   *   - 静止：一枚都不落（尾迹只在运动时召唤）
+   *   - 运动：累积走过的真实距离，每满一个「前后间距」落一枚（累积器保留余量 → 间距均匀）
+   *           间距由速度决定（见 trailGapMeters），且永远 ≥ 脚印长度 → 不重叠
+   */
+  dropTrailPrint(moving, point) {
+    if (!moving) {
+      this._meTrailGeo = null
+      this._trailAcc = 0
+      return
+    }
+    const from = this._meTrailGeo
+    if (!from) {
+      this._meTrailGeo = this.pushTrailPrint(point)
+      this._trailAcc = 0
+      this.paintMeMarkers() // 起步的第一枚立刻可见，不用等下一帧
+      return
+    }
+    const dist = geo.metersBetween(from, point)
+    this._meTrailGeo = point
+    // GPS 漂移（一步跳出十几米）不算走路：只把基准点挪过去，不留一串假脚印
+    if (dist > TRAIL_JUMP_M) {
+      this._trailAcc = 0
+      return
+    }
+    const acc0 = this._trailAcc || 0
+    this._trailAcc = acc0 + dist
+    const need = this.trailGapMeters()
+    let n = 0
+    // 单次定位最多补 4 枚，避免定位间隔过长时一次刷出一长串；
+    // 多枚时沿「上一落点 → 当前点」等距铺开（都放在当前点会重叠）
+    while (this._trailAcc >= need && n < 4) {
+      this._trailAcc -= need
+      n += 1
+      const along = n * need - acc0 // 沿 from → point 走过的米数
+      const k = dist > 0 ? Math.min(1, along / dist) : 1
+      this.pushTrailPrint({
+        latitude: from.latitude + (point.latitude - from.latitude) * k,
+        longitude: from.longitude + (point.longitude - from.longitude) * k,
+      })
+    }
+    if (n) this.paintMeMarkers()
+  },
+
+  /**
+   * 缩放变小（图被缩小）后，原本不重叠的尾迹可能被挤到一起：
+   * 从新到旧扫一遍，凡是跟「上一枚保留的」挨得太近的直接丢掉 —— 宁可尾巴变短，也不许重合。
+   * （放大不会触发任何剔除：间距只会变大）
+   */
+  pruneTrailOverlap() {
+    const list = this._meTrail || []
+    if (list.length < 2) return
+    const scale = this._liveScale || Number(this.data.scale) || 16
+    const mpp = this.metersPerPixel(scale, list[list.length - 1].latitude)
+    const minM = this.rpxPx(PAWN_H_RPX + TRAIL_GAP_PAD_RPX) * mpp
+    const keep = []
+    for (let i = list.length - 1; i >= 0; i--) {
+      const t = list[i]
+      if (!keep.length || geo.metersBetween(keep[0], t) >= minM) keep.unshift(t)
+    }
+    if (keep.length !== list.length) this._meTrail = keep
+  },
+
+  /** 落一枚尾迹，返回落点（供换算下一段步幅） */
+  pushTrailPrint(pos) {
+    this._trailSide = -(this._trailSide || 1) // 左右脚交替
+    this._trailSeq = (this._trailSeq || 0) + 1
+    this._meTrail.push({
+      id: this._trailSeq,
+      latitude: pos.latitude,
+      longitude: pos.longitude,
+      rotate: Number(this.data.me.rotate) || 0,
+      tilt: (Math.random() * 2 - 1) * TRAIL_TILT_DEG,
+      side: this._trailSide,
+      t0: Date.now(),
+    })
+    if (this._meTrail.length > TRAIL_MAX) this._meTrail = this._meTrail.slice(-TRAIL_MAX)
+    return pos
+  },
+
+  /** 朝向 → 旋转角：脚印图形默认朝上，顺时针旋转角 = 地图旋转角 + 手机朝向角 */
+  syncMeHeading() {
+    const rotate = Math.round((((this._meHeading || 0) + (this._meRotate || 0)) % 360 + 360) % 360)
+    if (rotate !== this.data.me.rotate) this.setData({ 'me.rotate': rotate })
   },
 
   /**
@@ -601,6 +1118,10 @@ Page({
         '图窗', this._mapWindow,
         '图窗样式', view.mapWin
       )
+      this._lastScale = view.scale
+      this._liveScale = view.scale
+      this._scaleSetAt = Date.now()
+      this._followMe = false // 入场：视野重新锁回手绘图中心
       this.setData(Object.assign(view, center), () => {
         this._overlayPlaced = true
       })
@@ -788,9 +1309,11 @@ Page({
       })
     })
 
+    // 缓存「基础 marker」：脚印每帧都要重算，不能把上一帧的脚印再拼一次
+    this._baseMarkers = markers
     this.setData({
       marks,
-      markers,
+      markers: markers.concat(this.buildMeMarkers()),
       polyline: this.buildPolyline(paths, draft, mode),
       paths,
       modeTip: this.buildModeTip(mode, draft),
@@ -1014,6 +1537,9 @@ Page({
   onPointTap(id) {
     this._lastNodeAt = Date.now()
     const mode = this.data.mode
+
+    // 「我的位置」脚印与行走尾迹只是装扮，点它们不该触发任何操作
+    if (id >= ME_ID_FOOT_L && id < DRAFT_ID_BASE) return
 
     // 路线草稿点：路线模式下点击 = 撤销该点
     if (id >= DRAFT_ID_BASE) {

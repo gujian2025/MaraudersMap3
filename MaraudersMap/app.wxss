@@ -33,6 +33,10 @@ textarea {
   z-index: 6; /* 各页面可用同名单类规则覆盖（地图页为 3） */
 }
 
+/* 封面脚印。地图页「我的位置」的脚印是原生 marker 渲染的贴图
+   （assets/images/footprint.png，由 _tools/make-footprint.js 按下面这组数值生成）：
+   ⚠ 改了下面的尺寸 / 圆角 / 颜色后，要重新跑一次 node _tools/make-footprint.js，
+     否则地图页脚印的会与封面不一致 */
 .footprint {
   position: absolute;
   width: 34rpx;

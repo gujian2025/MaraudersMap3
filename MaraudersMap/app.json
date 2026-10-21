@@ -37,10 +37,12 @@
   "lazyCodeLoading": "requiredComponents",
   "permission": {
     "scope.userLocation": {
-      "desc": "用于在地图上展示并回到你的当前位置"
+      "desc": "用于在地图上用脚印标出你的当前位置"
     }
   },
   "requiredPrivateInfos": [
-    "getLocation"
+    "getLocation",
+    "startLocationUpdate",
+    "onLocationChange"
   ]
 }

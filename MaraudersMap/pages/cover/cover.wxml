@@ -109,7 +109,7 @@
           enable-rotate="{{true}}"
           show-compass="{{true}}"
           show-scale="{{true}}"
-          show-location="{{true}}"
+          show-location="{{false}}"
           markers="{{markers}}"
           polyline="{{polyline}}"
           bindtap="onMapTap"
@@ -119,6 +119,12 @@
           bindupdated="onMapUpdated"
           bindregionchange="onRegionChange"
         ></map>
+
+        <!-- 「我的位置」脚印 + 行走尾迹：改用原生 marker 渲染（见 cover.js 的 buildMeMarkers）
+             为什么不在这一层画：regionchange 只在手势开始 / 结束各回调一次，手势进行中没有回调，
+             覆盖层坐标必然滞后 → 缩放时脚印会与地图脱节、手势结束才跳过去。
+             marker 直接绑经纬度，缩放 / 拖动 / 旋转全程与地图严格同步，尾迹也天然不移动 -->
+
         <view class="map-frame"></view>
       </view>
     </view>

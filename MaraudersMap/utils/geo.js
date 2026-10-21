@@ -27,6 +27,18 @@ function distanceToSegment(p, a, b) {
 }
 
 /**
+ * 按「东 / 北」方向的米数偏移一个坐标（小范围平面近似，与本文件的米制换算同一套系数）
+ * 用于把脚印沿朝向 / 侧向挪一点点：marker 只能绑经纬度，偏移量得先换成度
+ */
+function offsetMeters(point, eastM, northM) {
+  const cos = Math.cos((point.latitude * Math.PI) / 180)
+  return {
+    latitude: point.latitude + northM / LAT_M,
+    longitude: point.longitude + eastM / (LAT_M * Math.max(1e-6, cos)),
+  }
+}
+
+/**
  * 判断点击位置与折线的最近距离，返回最近的顶点下标
  * 用于基础库 < 3.1.0（无 bindpolylinetap）时点击路径的兜底命中
  */
@@ -50,6 +62,7 @@ function hitPolyline(point, points) {
 
 module.exports = {
   metersBetween,
+  offsetMeters,
   distanceToSegment,
   hitPolyline,
 }
